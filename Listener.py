@@ -1,11 +1,11 @@
 import asyncio
-import sounddevice as sd
-from scipy.io.wavfile import write
-from shazamio import Shazam
-from datetime import datetime
 import csv
-import time
 import os
+import time
+from datetime import datetime
+from scipy.io.wavfile import write
+import sounddevice as sd
+from shazamio import Shazam
 
 AUDIO_FILENAME = "clip.wav" #Songs saved as
 CSV_FILENAME = "songs.csv" #Data saved as
