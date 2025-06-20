@@ -6,30 +6,33 @@ from datetime import datetime
 import sounddevice
 import numpy as np
 import wave
-import pyaudio
 from shazamio import Shazam
 import ssl
 import certifi
 import aiohttp
-import json
+
 
 AUDIO_FILENAME = "clip.wav"
 CSV_FILENAME = "songs.csv" #Change this based on the file you want to save to
-RECORD_SECONDS = 10
-SAMPLE_RATE = 44100
+RECORD_SECONDS = 10 #Adjustable but 10 seconds is very functional
+SAMPLE_RATE = 44100 #Necessary
 
-
+#Creates the audio file needed to recognize the songs
 def record_audio(duration=RECORD_SECONDS, fs=SAMPLE_RATE):
+    #Create timestamp
     print(f"[{datetime.now().isoformat()}] Recording: ")
     try:
+        #Ensure that the audio can be recorded properly
         device_info = sounddevice.query_devices(None, 'input')
         channels = min(2, int(device_info['max_input_channels']))
 
+        #Record
         recording = sounddevice.rec(int(duration * fs), samplerate=fs, channels=channels, dtype=np.float32)
         sounddevice.wait()
 
         audio_data = np.int16(recording * 32767)
 
+        #Save the necessary info to the wave file
         with wave.open(AUDIO_FILENAME, 'wb') as wf:
             wf.setnchannels(channels)
             wf.setsampwidth(2)
