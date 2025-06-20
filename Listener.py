@@ -4,9 +4,14 @@ import os
 import time
 from datetime import datetime
 import sounddevice
-from scipy.io.wavfile import write
 import numpy as np
+import wave
 from shazamio import Shazam
+import ssl
+import certifi
+import aiohttp
+import json
+
 ###Must import certain packages to run this code###
 
 AUDIO_FILENAME = "clip.wav" #Songs saved as
@@ -15,50 +20,70 @@ RECORD_SECONDS = 10 #Clip record time
 SAMPLE_RATE = 44100 #The audio rate that the audio is recorded
 
 #Records a section of audio of the environment where music is playing
-def record_audio(duration = RECORD_SECONDS, fs = SAMPLE_RATE):
+def record_audio(duration=RECORD_SECONDS, fs=SAMPLE_RATE):
     print(f"[{datetime.now().isoformat()}] Recording: ")
-    audio = sounddevice.rec(int(duration * fs), samplerate = fs, channels=2) #Records audio using a sounddevice
-    sounddevice.wait()
-    write(AUDIO_FILENAME, fs, audio)
-    #Create the audio clip
-    #Use the wave import to write audio data directly to the wav file
-    print("Done with recording.")
+    try:
+        # Query the default input device to get its channel count
+        device_info = sounddevice.query_devices(None, 'input')
+        channels = min(2, int(device_info['max_input_channels']))
+
+        # Record audio with the available number of channels
+        recording = sounddevice.rec(int(duration * fs), samplerate=fs, channels=channels, dtype=np.float32)
+        sounddevice.wait()
+
+        # Convert float32 audio data to int16
+        audio_data = np.int16(recording * 32767)
+
+        # Save as WAV file
+        with wave.open(AUDIO_FILENAME, 'wb') as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(2)
+            wf.setframerate(fs)
+            wf.writeframes(audio_data.tobytes())
+
+        print("Done with recording.")
+    except Exception as e:
+        print(f"Error recording audio: {str(e)}")
+        raise
 
 async def recognize_song(filename):
     print("Finding song: ")
-    shazam = Shazam() #Call Shazam
-    out = await shazam.recognize_song(filename)
-    track = out.get('track') #Info of the track
-    if track:
-        #Returns the title if known
-        title = track.get('title', 'Unknown Title')
-        subtitle = track.get('subtitle', 'Unknown Artist')
-        #Checks validity of the song from Shazam
-        #Returns if there is one know either artist or title
-        if title != 'Unknown Title' or subtitle != 'Unknown Artist':
-            print(f"Recognized: {title} - {subtitle}")
-            return title, subtitle
-        else:
-            #Song is unknown
-            print("Both title and artist unknown - treating as unrecognized")
-            return None, None
-    return None, None
+    try:
+        shazam = Shazam()
+        out = await shazam.recognize(filename)
+        track = out.get('track')
+        if track:
+            title = track.get('title', 'Unknown Title')
+            subtitle = track.get('subtitle', 'Unknown Artist')
+            if title != 'Unknown Title' or subtitle != 'Unknown Artist':
+                print(f"Recognized: {title} - {subtitle}")
+                return title, subtitle
+            else:
+                print("Both title and artist unknown - treating as unrecognized")
+                return None, None
+        return None, None
+    except Exception as e:
+        print(f"Error recognizing song: {str(e)}")
+        return None, None
 
 def log_to_csv(title, subtitle, csv_filename="songs.csv"):
     #Ensures a path to the file
 
-    try: file_exists = os.path.getsize(csv_filename) ### will throw an exception if the file does not exist
-    finally: FileNotFoundError
-
-    with open(csv_filename, mode = 'a', newline = '', encoding = 'utf-8') as file:
-        writer = csv.writer(file)
-       #If the path to the file does not exist, then create a new file with the name
+    try:
+        file_exists = os.path.getsize(csv_filename) ### will throw an exception if the file does not exist
+        with open(csv_filename, mode = 'a', newline = '', encoding = 'utf-8') as file:
+            writer = csv.writer(file)
+        #If the path to the file does not exist, then create a new file with the name
         #And necessary info to start logging songs
-        if not file_exists:
-            writer.writerow(["Timestamp", "Title", "Artist"])
+            if not file_exists:
+                writer.writerow(["Timestamp", "Title", "Artist"])
         #Log the song
-        writer.writerow([datetime.now().isoformat(), title, subtitle])
-    print("Logged to CSV")
+            writer.writerow([datetime.now().isoformat(), title, subtitle])
+        print("Logged to CSV")
+    except Exception as e:
+        print(f"Error writing to CSV: {str(e)}")
+        raise
+
 
 async def main_loop():
     print("Starting song listener")
